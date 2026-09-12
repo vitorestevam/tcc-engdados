@@ -1,0 +1,2 @@
+# Nome da fonte | categoria | handle ou channelId
+Ciro Gomes|candidato|@CiroGomesOficial
