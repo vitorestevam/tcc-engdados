@@ -3,6 +3,7 @@
 
 import argparse
 import json
+import logging
 import os
 from datetime import UTC, datetime
 from pathlib import Path
@@ -12,8 +13,9 @@ from googleapiclient.discovery import build
 
 COLLECTION_START = datetime(2026, 9, 1, tzinfo=UTC)
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-CHANNELS_FILE = PROJECT_ROOT / "settings"/ "channels.txt"
+CHANNELS_FILE = PROJECT_ROOT / "settings" / "channels.txt"
 OUTPUT_DIR = PROJECT_ROOT / "data" / "videos"
+LOGGER = logging.getLogger(__name__)
 
 def parse_channels(path: Path) -> list[dict[str, str]]:
     channels = []
@@ -58,8 +60,10 @@ def resolve_channel(client, identifier: str) -> dict[str, str]:
 def list_video_ids(client, playlist_id: str, collection_end: datetime) -> list[tuple[str, datetime]]:
     video_ids = []
     page_token = None
+    page_count = 0
 
     while True:
+        page_count += 1
         response = client.playlistItems().list(
             part="contentDetails",
             playlistId=playlist_id,
@@ -76,6 +80,7 @@ def list_video_ids(client, playlist_id: str, collection_end: datetime) -> list[t
 
         page_token = response.get("nextPageToken")
         if not page_token:
+            LOGGER.info("Playlist processada: %s paginas, %s videos na janela", page_count, len(video_ids))
             return video_ids
 
 
@@ -112,28 +117,30 @@ def fetch_videos(client, video_ids: list[tuple[str, datetime]], channel: dict[st
     return videos
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Coleta videos publicados desde 01/09/2026.")
-    parser.add_argument("--channels-file", type=Path, default=CHANNELS_FILE)
-    parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
-    args = parser.parse_args()
-
+def collect_videos(channels_file: Path | str, output_file: Path | str) -> str:
+    channels_file = Path(channels_file)
+    output_file = Path(output_file)
+    LOGGER.info("Iniciando coleta de videos: canais=%s saida=%s", channels_file, output_file)
     load_dotenv(PROJECT_ROOT / ".env")
     api_key = os.getenv("YOUTUBE_API_KEY")
     if not api_key:
+        LOGGER.error("YOUTUBE_API_KEY nao foi encontrada no ambiente ou em %s", PROJECT_ROOT / ".env")
         raise RuntimeError("Defina YOUTUBE_API_KEY no ambiente ou no arquivo .env do projeto.")
 
     collection_end = datetime.now(UTC)
+    LOGGER.info("Criando cliente YouTube para janela %s a %s", COLLECTION_START.isoformat(), collection_end.isoformat())
     client = build("youtube", "v3", developerKey=api_key)
     videos = []
 
-    for source in parse_channels(args.channels_file):
+    for source in parse_channels(channels_file):
+        LOGGER.info("Resolvendo canal: fonte=%s identificador=%s", source["source"], source["identifier"])
         channel = resolve_channel(client, source["identifier"])
+        LOGGER.info("Canal resolvido: titulo=%s id=%s", channel["channel_title"], channel["channel_id"])
         video_ids = list_video_ids(client, channel["uploads_playlist_id"], collection_end)
-        videos.extend(fetch_videos(client, video_ids, channel, source))
+        channel_videos = fetch_videos(client, video_ids, channel, source)
+        videos.extend(channel_videos)
+        LOGGER.info("Metadados coletados: fonte=%s videos=%s", source["source"], len(channel_videos))
 
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = args.output_dir / f"videos_{collection_end.strftime('%Y%m%dT%H%M%SZ')}.json"
     payload = {
         "collected_at": collection_end.isoformat(),
         "collection_start": COLLECTION_START.isoformat(),
@@ -141,8 +148,30 @@ def main() -> None:
         "video_count": len(videos),
         "videos": videos,
     }
-    output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"{len(videos)} videos salvos em {output_path}")
+    try:
+        LOGGER.info("Preparando diretorio de saida: %s", output_file.parent)
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        LOGGER.info("Gravando arquivo de videos: %s", output_file)
+        output_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    except OSError as error:
+        LOGGER.exception("Falha ao gravar coleta de videos em %s", output_file)
+        raise RuntimeError(f"Nao foi possivel gravar o arquivo de videos: {output_file}") from error
+    LOGGER.info("Coleta de videos concluida: videos=%s arquivo=%s", len(videos), output_file)
+    return str(output_file)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Coleta videos publicados desde 01/09/2026.")
+    parser.add_argument("--channels-file", type=Path, default=CHANNELS_FILE)
+    output_group = parser.add_mutually_exclusive_group()
+    output_group.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
+    output_group.add_argument("--output-file", type=Path, help="Arquivo JSON de saida da execucao")
+    args = parser.parse_args()
+
+    output_path = args.output_file or (
+        args.output_dir / f"videos_{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.json"
+    )
+    print(f"Videos salvos em {collect_videos(args.channels_file, output_path)}")
 
 
 if __name__ == "__main__":
