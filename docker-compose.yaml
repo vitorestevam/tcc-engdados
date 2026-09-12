@@ -1,0 +1,64 @@
+x-airflow-common: &airflow-common
+  build: .
+  user: "${AIRFLOW_UID:-50000}:0"
+  env_file: .env
+  environment:
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__WEBSERVER__SECRET_KEY: "youtube-pipeline-local-airflow-secret-key"
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./src:/opt/airflow/project/src:ro
+    - ./settings:/opt/airflow/project/settings:ro
+    - ./data:/opt/airflow/data
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  airflow-init:
+    <<: *airflow-common
+    user: "0:0"
+    command: >
+      bash -c "mkdir -p /opt/airflow/data &&
+      chown -R 50000:0 /opt/airflow/data &&
+      su airflow -s /bin/bash -c 'airflow db migrate &&
+      (airflow users create --username airflow --password airflow --firstname Airflow --lastname Admin --role Admin --email airflow@example.com || true)'"
+
+  airflow-webserver:
+    <<: *airflow-common
+    command: webserver
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+
+volumes:
+  postgres-data:
