@@ -14,7 +14,7 @@ from silver.cleaning import clean_text
 from silver.relevance import RELEVANCE_FILE, parse_relevance_terms
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SILVER_DIR = PROJECT_ROOT.parent / "data" / "silver"
+SILVER_DIR = PROJECT_ROOT / "data" / "silver"
 INPUT_FILE = SILVER_DIR / "videos_relevantes.parquet"
 OUTPUT_FILE = SILVER_DIR / "videos_silver.parquet"
 

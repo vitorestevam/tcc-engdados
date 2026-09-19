@@ -12,7 +12,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_OUTPUT_DIR = PROJECT_ROOT.parent / "data" / "comments"
+DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "data" / "comments"
 
 
 def comment_record(item: dict, video: dict, parent_id: str | None) -> dict:

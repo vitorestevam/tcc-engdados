@@ -14,8 +14,8 @@ import pandas as pd
 from silver.cleaning import clean_text, to_utc
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-BRONZE_COMMENTS_DIR = PROJECT_ROOT.parent / "data" / "comments"
-SILVER_DIR = PROJECT_ROOT.parent / "data" / "silver"
+BRONZE_COMMENTS_DIR = PROJECT_ROOT / "data" / "comments"
+SILVER_DIR = PROJECT_ROOT / "data" / "silver"
 VIDEOS_SILVER_FILE = SILVER_DIR / "videos_silver.parquet"
 OUTPUT_FILE = SILVER_DIR / "comments_silver.parquet"
 

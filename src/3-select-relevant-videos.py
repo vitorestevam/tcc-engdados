@@ -10,8 +10,8 @@ import pandas as pd
 from silver.relevance import RELEVANCE_FILE, is_relevant, parse_relevance_terms
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-BRONZE_VIDEOS_DIR = PROJECT_ROOT.parent / "data" / "videos"
-SILVER_DIR = PROJECT_ROOT.parent / "data" / "silver"
+BRONZE_VIDEOS_DIR = PROJECT_ROOT / "data" / "videos"
+SILVER_DIR = PROJECT_ROOT / "data" / "silver"
 
 
 def load_bronze_videos(bronze_dir: Path) -> list[dict]:

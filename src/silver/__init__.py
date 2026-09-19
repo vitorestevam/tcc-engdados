@@ -1,0 +1,1 @@
+"""Funcoes compartilhadas pelas etapas da camada Silver."""

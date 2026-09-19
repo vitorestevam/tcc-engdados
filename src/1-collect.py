@@ -13,7 +13,7 @@ from googleapiclient.discovery import build
 COLLECTION_START = datetime(2026, 9, 1, tzinfo=UTC)
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CHANNELS_FILE = PROJECT_ROOT / "settings"/ "channels.txt"
-OUTPUT_DIR = PROJECT_ROOT.parent / "data" / "videos"
+OUTPUT_DIR = PROJECT_ROOT / "data" / "videos"
 
 def parse_channels(path: Path) -> list[dict[str, str]]:
     channels = []
