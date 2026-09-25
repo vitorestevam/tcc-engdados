@@ -17,13 +17,19 @@ SILVER_DIR = PROJECT_ROOT / "data" / "silver"
 def load_bronze_videos(bronze_dir: Path) -> list[dict]:
     videos = []
     for path in sorted(bronze_dir.glob("videos_*.json")):
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        collected_at = payload.get("collected_at")
-        for video in payload.get("videos", []):
-            video = dict(video)
-            video["source_file"] = path.name
-            video["collected_at"] = collected_at
-            videos.append(video)
+        videos.extend(load_bronze_video_file(path))
+    return videos
+
+
+def load_bronze_video_file(path: Path) -> list[dict]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    collected_at = payload.get("collected_at")
+    videos = []
+    for video in payload.get("videos", []):
+        video = dict(video)
+        video["source_file"] = path.name
+        video["collected_at"] = collected_at
+        videos.append(video)
     return videos
 
 
@@ -46,13 +52,20 @@ def write_parquet(records: list[dict], path: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Filtra videos relevantes ao tema da eleicao.")
-    parser.add_argument("--videos-dir", type=Path, default=BRONZE_VIDEOS_DIR)
+    input_group = parser.add_mutually_exclusive_group()
+    input_group.add_argument("--videos-dir", type=Path, default=BRONZE_VIDEOS_DIR)
+    input_group.add_argument("--videos-file", type=Path, help="JSON Bronze de uma execucao especifica")
     parser.add_argument("--relevance-file", type=Path, default=RELEVANCE_FILE)
     parser.add_argument("--output-dir", type=Path, default=SILVER_DIR)
     args = parser.parse_args()
 
     terms = parse_relevance_terms(args.relevance_file)
-    videos = deduplicate_latest(load_bronze_videos(args.videos_dir))
+    source_videos = (
+        load_bronze_video_file(args.videos_file)
+        if args.videos_file
+        else load_bronze_videos(args.videos_dir)
+    )
+    videos = deduplicate_latest(source_videos)
 
     relevantes = []
     descartados = []

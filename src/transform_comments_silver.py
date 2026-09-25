@@ -38,13 +38,19 @@ OUTPUT_COLUMNS = [
 def load_bronze_comments(comments_dir: Path) -> list[dict]:
     comments = []
     for path in sorted(comments_dir.glob("comments_*.json")):
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        collected_at = payload.get("collected_at")
-        for comment in payload.get("comments", []):
-            comment = dict(comment)
-            comment["source_file"] = path.name
-            comment["collected_at"] = collected_at
-            comments.append(comment)
+        comments.extend(load_bronze_comments_file(path))
+    return comments
+
+
+def load_bronze_comments_file(path: Path) -> list[dict]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    collected_at = payload.get("collected_at")
+    comments = []
+    for comment in payload.get("comments", []):
+        comment = dict(comment)
+        comment["source_file"] = path.name
+        comment["collected_at"] = collected_at
+        comments.append(comment)
     return comments
 
 
@@ -60,14 +66,21 @@ def deduplicate_latest(comments: list[dict]) -> list[dict]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Filtra e padroniza os comentarios dos videos relevantes.")
-    parser.add_argument("--comments-dir", type=Path, default=BRONZE_COMMENTS_DIR)
+    input_group = parser.add_mutually_exclusive_group()
+    input_group.add_argument("--comments-dir", type=Path, default=BRONZE_COMMENTS_DIR)
+    input_group.add_argument("--comments-file", type=Path, help="JSON Bronze de uma execucao especifica")
     parser.add_argument("--videos-silver-file", type=Path, default=VIDEOS_SILVER_FILE)
     parser.add_argument("--output-file", type=Path, default=OUTPUT_FILE)
     args = parser.parse_args()
 
     relevant_video_ids = set(pd.read_parquet(args.videos_silver_file)["video_id"])
 
-    comments = load_bronze_comments(args.comments_dir)
+    source_comments = (
+        load_bronze_comments_file(args.comments_file)
+        if args.comments_file
+        else load_bronze_comments(args.comments_dir)
+    )
+    comments = source_comments
     comments = [comment for comment in comments if comment["video_id"] in relevant_video_ids]
     comments = deduplicate_latest(comments)
 
