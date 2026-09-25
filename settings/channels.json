@@ -1,0 +1,14 @@
+{
+  "channels": [
+    {
+      "source": "Ciro Gomes",
+      "category": "candidato",
+      "identifier": "@CiroGomesOficial"
+    },
+    {
+      "source": "Diário do Nordeste",
+      "category": "imprensa",
+      "identifier": "@diariodonordeste"
+    }
+  ]
+}

@@ -1,3 +1,0 @@
-# Nome da fonte | categoria | handle ou channelId
-Ciro Gomes|candidato|@CiroGomesOficial
-Diário do Nordeste|imprensa|@diariodonordeste
