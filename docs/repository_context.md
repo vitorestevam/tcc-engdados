@@ -18,11 +18,11 @@ A arquitetura atual possui Bronze e Silver:
 tcc-engdados/
 ├── dags/youtube_pipeline.py       # orquestracao Airflow
 ├── src/
-│   ├── collect_videos.py
-│   ├── collect_comments.py
-│   ├── select_relevant_videos.py
-│   ├── transform_videos_silver.py
-│   ├── transform_comments_silver.py
+│   ├── bronze_collect_videos.py
+│   ├── bronze_collect_comments.py
+│   ├── silver_select_relevant_videos.py
+│   ├── silver_transform_videos.py
+│   ├── silver_transform_comments.py
 │   └── silver/
 │       ├── cleaning.py
 │       └── relevance.py
@@ -47,7 +47,7 @@ Nome da fonte|categoria|@handle-ou-channelId
 tipo|rotulo|termo
 ```
 
-`collect_videos.py` valida que cada canal possui tres campos preenchidos. `silver/relevance.py` exige tres campos e permite `rotulo` vazio para termos genericos. Os dois arquivos sao montados como somente leitura no container Airflow.
+`bronze_collect_videos.py` valida que cada canal possui tres campos preenchidos. `silver/relevance.py` exige tres campos e permite `rotulo` vazio para termos genericos. Os dois arquivos sao montados como somente leitura no container Airflow.
 
 O segredo `YOUTUBE_API_KEY` deve existir apenas em `.env` ou nas variaveis de ambiente. Ele nao deve ser versionado, exibido em logs ou colocado em documentacao. Uma exposicao anterior no historico de terminal foi identificada; a chave deve ser rotacionada e restringida no Google Cloud se isso ainda nao tiver ocorrido.
 
@@ -74,19 +74,19 @@ flowchart LR
 
 ### 1. Videos Bronze
 
-`src/collect_videos.py` resolve cada handle ou channel ID, percorre a playlist de uploads do canal e filtra videos entre `COLLECTION_START` (`2026-09-01T00:00:00+00:00`) e o momento da execucao. Depois busca metadados em lotes de ate 50 IDs.
+`src/bronze_collect_videos.py` resolve cada handle ou channel ID, percorre a playlist de uploads do canal e filtra videos entre `COLLECTION_START` (`2026-09-01T00:00:00+00:00`) e o momento da execucao. Depois busca metadados em lotes de ate 50 IDs.
 
 O JSON de saida contem `collected_at`, `collection_start`, `collection_end`, `video_count` e `videos`. Cada video inclui origem, categoria, dados do canal, identificador, titulo, descricao, data de publicacao, contadores e status de privacidade.
 
 ### 2. Comentarios Bronze
 
-`src/collect_comments.py` recebe o JSON de videos e coleta comentarios de primeiro nivel e respostas. Erros da API em um video sao registrados em `video_status`; os demais videos continuam sendo processados.
+`src/bronze_collect_comments.py` recebe o JSON de videos e coleta comentarios de primeiro nivel e respostas. Erros da API em um video sao registrados em `video_status`; os demais videos continuam sendo processados.
 
 O JSON de saida contem `collected_at`, `source_videos_file`, contagens, `video_status` e `comments`. Comentarios podem conter dados pessoais e nao sao anonimizados.
 
 ### 3. Selecao De Relevancia
 
-`src/select_relevant_videos.py` usa `silver.relevance` para comparar termos normalizados com titulo e descricao. A comparacao ignora maiusculas, minusculas e acentos. Ela gera:
+`src/silver_select_relevant_videos.py` usa `silver.relevance` para comparar termos normalizados com titulo e descricao. A comparacao ignora maiusculas, minusculas e acentos. Ela gera:
 
 - `videos_relevantes.parquet`
 - `videos_descartados.parquet`
@@ -95,11 +95,11 @@ Cada registro preserva os dados Bronze e recebe `matched_terms` e `source_file`.
 
 ### 4. Videos Silver
 
-`src/transform_videos_silver.py` limpa titulo e descricao, padroniza timestamps em UTC, preserva metricas e cria `candidatos_mencionados` a partir dos termos de tipo `candidato` e `vice` encontrados na etapa anterior.
+`src/silver_transform_videos.py` limpa titulo e descricao, padroniza timestamps em UTC, preserva metricas e cria `candidatos_mencionados` a partir dos termos de tipo `candidato` e `vice` encontrados na etapa anterior.
 
 ### 5. Comentarios Silver
 
-`src/transform_comments_silver.py` limpa e padroniza os comentarios dos videos presentes em `videos_silver.parquet`. O resultado e `comments_silver.parquet`.
+`src/silver_transform_comments.py` limpa e padroniza os comentarios dos videos presentes em `videos_silver.parquet`. O resultado e `comments_silver.parquet`.
 
 As transformacoes Silver deduplicam por `video_id` ou `comment_id`, mantendo o registro com `collected_at` mais recente quando recebem diretorios com mais de uma extracao.
 
@@ -111,11 +111,11 @@ O projeto requer Python 3.12 e as dependencias em `requirements.txt`: cliente da
 python -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 
-python src/collect_videos.py
-python src/collect_comments.py --videos-file data/videos/videos_<timestamp>.json
-python src/select_relevant_videos.py
-python src/transform_videos_silver.py
-python src/transform_comments_silver.py
+python src/bronze_collect_videos.py
+python src/bronze_collect_comments.py --videos-file data/videos/videos_<timestamp>.json
+python src/silver_select_relevant_videos.py
+python src/silver_transform_videos.py
+python src/silver_transform_comments.py
 ```
 
 Para evitar combinar extracoes historicas, as etapas Silver aceitam caminhos explicitos de arquivos e diretorios. A coleta de videos percorre toda a playlist de uploads antes de filtrar a janela, o que pode consumir tempo e cota em canais grandes.
@@ -147,7 +147,7 @@ data/silver/<timestamp>/comments_silver.parquet
 Ordem atual das tarefas:
 
 ```text
-collect_videos -> collect_comments -> select_relevant_videos -> transform_videos_silver -> transform_comments_silver
+config_prepare_run_settings -> bronze_collect_videos -> bronze_collect_comments -> silver_select_relevant_videos -> silver_transform_videos -> silver_transform_comments
 ```
 
 `collect_videos` e `collect_comments` usam `PythonOperator`; as tres etapas Silver usam `BashOperator`, executando os scripts em `src/` com arquivos da execucao como argumentos.

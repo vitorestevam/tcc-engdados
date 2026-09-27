@@ -7,7 +7,6 @@ from pathlib import Path
 
 from airflow import DAG
 from airflow.models.param import Param
-from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator
 
 PROJECT_DIR = "/opt/airflow/project"
@@ -21,9 +20,12 @@ COLLECTION_END = "{{ dag_run.conf.get('end_date', params.end_date) }}T23:59:59.9
 
 sys.path.insert(0, f"{PROJECT_DIR}/src")
 
-from collect_comments import collect_comments
-from collect_videos import collect_videos
+from bronze_collect_comments import collect_comments
+from bronze_collect_videos import collect_videos
 from prepare_run_settings import prepare_run_settings
+from silver_select_relevant_videos import select_relevant_videos
+from silver_transform_comments import transform_comments_silver
+from silver_transform_videos import transform_videos_silver
 
 settings_dir = Path(PROJECT_DIR) / "settings"
 if not settings_dir.is_dir():
@@ -74,13 +76,13 @@ with DAG(
     tags=["youtube", "bronze", "silver"],
 ) as dag:
     prepare_run_settings_task = PythonOperator(
-        task_id="prepare_run_settings",
+        task_id="config_prepare_run_settings",
         python_callable=prepare_run_settings,
         op_kwargs={"output_dir": CONFIG_RUN_DIR},
     )
 
     collect_videos_task = PythonOperator(
-        task_id="collect_videos",
+        task_id="bronze_collect_videos",
         python_callable=collect_videos,
         op_kwargs={
             "channels_file": f"{CONFIG_RUN_DIR}/channels.json",
@@ -91,7 +93,7 @@ with DAG(
     )
 
     collect_comments_task = PythonOperator(
-        task_id="collect_comments",
+        task_id="bronze_collect_comments",
         python_callable=collect_comments,
         op_kwargs={
             "videos_file": f"{BRONZE_RUN_DIR}/videos.json",
@@ -99,34 +101,34 @@ with DAG(
         },
     )
 
-    select_relevant_videos_task = BashOperator(
-        task_id="select_relevant_videos",
-        bash_command=(
-            f"python {PROJECT_DIR}/src/select_relevant_videos.py "
-            f"--videos-file {BRONZE_RUN_DIR}/videos.json "
-            f"--relevance-file {CONFIG_RUN_DIR}/relevance_terms.json "
-            f"--output-dir {SILVER_RUN_DIR}"
-        ),
+    select_relevant_videos_task = PythonOperator(
+        task_id="silver_select_relevant_videos",
+        python_callable=select_relevant_videos,
+        op_kwargs={
+            "videos_file": f"{BRONZE_RUN_DIR}/videos.json",
+            "relevance_file": f"{CONFIG_RUN_DIR}/relevance_terms.json",
+            "output_dir": SILVER_RUN_DIR,
+        },
     )
 
-    transform_videos_silver_task = BashOperator(
-        task_id="transform_videos_silver",
-        bash_command=(
-            f"python {PROJECT_DIR}/src/transform_videos_silver.py "
-            f"--input-file {SILVER_RUN_DIR}/videos_relevantes.parquet "
-            f"--relevance-file {CONFIG_RUN_DIR}/relevance_terms.json "
-            f"--output-file {SILVER_RUN_DIR}/videos_silver.parquet"
-        ),
+    transform_videos_silver_task = PythonOperator(
+        task_id="silver_transform_videos",
+        python_callable=transform_videos_silver,
+        op_kwargs={
+            "input_file": f"{SILVER_RUN_DIR}/videos_relevantes.parquet",
+            "relevance_file": f"{CONFIG_RUN_DIR}/relevance_terms.json",
+            "output_file": f"{SILVER_RUN_DIR}/videos_silver.parquet",
+        },
     )
 
-    transform_comments_silver_task = BashOperator(
-        task_id="transform_comments_silver",
-        bash_command=(
-            f"python {PROJECT_DIR}/src/transform_comments_silver.py "
-            f"--comments-file {BRONZE_RUN_DIR}/comments.json "
-            f"--videos-silver-file {SILVER_RUN_DIR}/videos_silver.parquet "
-            f"--output-file {SILVER_RUN_DIR}/comments_silver.parquet"
-        ),
+    transform_comments_silver_task = PythonOperator(
+        task_id="silver_transform_comments",
+        python_callable=transform_comments_silver,
+        op_kwargs={
+            "comments_file": f"{BRONZE_RUN_DIR}/comments.json",
+            "videos_silver_file": f"{SILVER_RUN_DIR}/videos_silver.parquet",
+            "output_file": f"{SILVER_RUN_DIR}/comments_silver.parquet",
+        },
     )
 
     (

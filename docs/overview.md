@@ -15,11 +15,11 @@ Este documento descreve o estado atual da branch `airflow`, verificado em 20/09/
 
 | Etapa | Script ou tarefa | Entrada | Saida | Estado |
 | --- | --- | --- | --- | --- |
-| 1. Coletar videos Bronze | `src/collect_videos.py` | `settings/channels.json` e YouTube Data API v3 | JSON Bronze de videos | Implementada e executada |
-| 2. Coletar comentarios Bronze | `src/collect_comments.py` | JSON de videos e YouTube Data API v3 | JSON Bronze de comentarios | Implementada e executada |
-| 3. Selecionar videos relevantes | `src/select_relevant_videos.py` | JSON Bronze de videos e `settings/relevance_terms.json` | Parquets de videos relevantes e descartados | Implementada e executada |
-| 4. Transformar videos Silver | `src/transform_videos_silver.py` | `videos_relevantes.parquet` | `videos_silver.parquet` | Implementada e executada |
-| 5. Transformar comentarios Silver | `src/transform_comments_silver.py` | JSON Bronze de comentarios e `videos_silver.parquet` | `comments_silver.parquet` | Implementada e executada |
+| 1. Coletar videos Bronze | `src/bronze_collect_videos.py` | `settings/channels.json` e YouTube Data API v3 | JSON Bronze de videos | Implementada e executada |
+| 2. Coletar comentarios Bronze | `src/bronze_collect_comments.py` | JSON de videos e YouTube Data API v3 | JSON Bronze de comentarios | Implementada e executada |
+| 3. Selecionar videos relevantes | `src/silver_select_relevant_videos.py` | JSON Bronze de videos e `settings/relevance_terms.json` | Parquets de videos relevantes e descartados | Implementada e executada |
+| 4. Transformar videos Silver | `src/silver_transform_videos.py` | `videos_relevantes.parquet` | `videos_silver.parquet` | Implementada e executada |
+| 5. Transformar comentarios Silver | `src/silver_transform_comments.py` | JSON Bronze de comentarios e `videos_silver.parquet` | `comments_silver.parquet` | Implementada e executada |
 | Orquestrar pipeline | `dags/youtube_pipeline.py` | Docker Compose, Airflow e os cinco estagios | Bronze e Silver por execucao | Implementada; nao validada neste ambiente sem Docker |
 
 Artefatos locais da execucao mais recente:
@@ -37,19 +37,19 @@ Os dados refletem o momento da coleta. Metricas de engajamento e a disponibilida
 
 ```mermaid
 flowchart LR
-    CFG["settings/channels.json"] --> V["collect_videos.py"]
+    CFG["settings/channels.json"] --> V["bronze_collect_videos.py"]
     API["YouTube Data API v3"] --> V
     V --> BV[("Bronze videos JSON")]
-    BV --> C["collect_comments.py"]
+    BV --> C["bronze_collect_comments.py"]
     API --> C
     C --> BC[("Bronze comments JSON")]
-    BV --> R["select_relevant_videos.py"]
+    BV --> R["silver_select_relevant_videos.py"]
     TERMS["settings/relevance_terms.json"] --> R
     R --> VR[("videos_relevantes.parquet")]
     R --> VD[("videos_descartados.parquet")]
-    VR --> VS["transform_videos_silver.py"]
+    VR --> VS["silver_transform_videos.py"]
     VS --> SV[("videos_silver.parquet")]
-    BC --> CS["transform_comments_silver.py"]
+    BC --> CS["silver_transform_comments.py"]
     SV --> CS
     CS --> SC[("comments_silver.parquet")]
 ```
@@ -94,29 +94,29 @@ YOUTUBE_API_KEY=sua_chave
 As etapas abaixo usam os destinos padrao sob `data/` na raiz deste repositorio.
 
 ```bash
-python src/collect_videos.py \
+python src/bronze_collect_videos.py \
   --start-date 2026-09-01 \
   --end-date 2026-09-20
-python src/collect_comments.py \
+python src/bronze_collect_comments.py \
   --videos-file data/videos/videos_<timestamp>.json
 
-python src/select_relevant_videos.py
-python src/transform_videos_silver.py
-python src/transform_comments_silver.py
+python src/silver_select_relevant_videos.py
+python src/silver_transform_videos.py
+python src/silver_transform_comments.py
 ```
 
 Para processar somente uma extracao Bronze especifica, evitando misturar historico de execucoes, use os argumentos explicitos:
 
 ```bash
-python src/select_relevant_videos.py \
+python src/silver_select_relevant_videos.py \
   --videos-file data/videos/videos_<timestamp>.json \
   --output-dir data/silver/<run_id>
 
-python src/transform_videos_silver.py \
+python src/silver_transform_videos.py \
   --input-file data/silver/<run_id>/videos_relevantes.parquet \
   --output-file data/silver/<run_id>/videos_silver.parquet
 
-python src/transform_comments_silver.py \
+python src/silver_transform_comments.py \
   --comments-file data/comments/comments_<timestamp>.json \
   --videos-silver-file data/silver/<run_id>/videos_silver.parquet \
   --output-file data/silver/<run_id>/comments_silver.parquet
@@ -151,7 +151,7 @@ data/silver/<timestamp>/comments_silver.parquet
 Ordem das tarefas:
 
 ```text
-prepare_run_settings -> collect_videos -> collect_comments -> select_relevant_videos -> transform_videos_silver -> transform_comments_silver
+config_prepare_run_settings -> bronze_collect_videos -> bronze_collect_comments -> silver_select_relevant_videos -> silver_transform_videos -> silver_transform_comments
 ```
 
 No Airflow, abra a DAG `youtube_pipeline`, use **Trigger DAG** e informe a configuracao JSON. O arquivo `config/airflow_run_conf.json` e um modelo valido para essa tela:
@@ -211,11 +211,11 @@ tcc-engdados/
 │   ├── channels.json
 │   └── relevance_terms.json
 ├── src/
-│   ├── collect_videos.py
-│   ├── collect_comments.py
-│   ├── select_relevant_videos.py
-│   ├── transform_videos_silver.py
-│   ├── transform_comments_silver.py
+│   ├── bronze_collect_videos.py
+│   ├── bronze_collect_comments.py
+│   ├── silver_select_relevant_videos.py
+│   ├── silver_transform_videos.py
+│   ├── silver_transform_comments.py
 │   └── silver/
 ├── docker-compose.yaml
 ├── Dockerfile
