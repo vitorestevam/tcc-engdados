@@ -46,16 +46,15 @@ def candidatos_mencionados(matched_terms, lookup: dict[str, str]) -> list[str]:
     return sorted({lookup[termo] for termo in matched_terms if termo in lookup})
 
 
-def transform_videos_silver(
-    input_file: Path | str = INPUT_FILE,
-    relevance_file: Path | str = RELEVANCE_FILE,
-    output_file: Path | str = OUTPUT_FILE,
-) -> None:
-    input_file = Path(input_file)
-    relevance_file = Path(relevance_file)
-    output_file = Path(output_file)
-    df = pd.read_parquet(input_file)
-    relevance_terms = parse_relevance_terms(relevance_file)
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Limpa e padroniza os videos relevantes (camada Silver).")
+    parser.add_argument("--input-file", type=Path, default=INPUT_FILE)
+    parser.add_argument("--relevance-file", type=Path, default=RELEVANCE_FILE)
+    parser.add_argument("--output-file", type=Path, default=OUTPUT_FILE)
+    args = parser.parse_args()
+
+    df = pd.read_parquet(args.input_file)
+    relevance_terms = parse_relevance_terms(args.relevance_file)
     candidate_lookup = build_candidate_lookup(relevance_terms)
 
     df["title_clean"] = df["title"].apply(clean_text)
@@ -68,19 +67,9 @@ def transform_videos_silver(
 
     silver_df = df[OUTPUT_COLUMNS].drop_duplicates(subset="video_id", keep="last")
 
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    silver_df.to_parquet(output_file, index=False)
-    print(f"{len(silver_df)} videos gravados em {output_file}")
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Limpa e padroniza os videos relevantes (camada Silver).")
-    parser.add_argument("--input-file", type=Path, default=INPUT_FILE)
-    parser.add_argument("--relevance-file", type=Path, default=RELEVANCE_FILE)
-    parser.add_argument("--output-file", type=Path, default=OUTPUT_FILE)
-    args = parser.parse_args()
-
-    transform_videos_silver(args.input_file, args.relevance_file, args.output_file)
+    args.output_file.parent.mkdir(parents=True, exist_ok=True)
+    silver_df.to_parquet(args.output_file, index=False)
+    print(f"{len(silver_df)} videos gravados em {args.output_file}")
 
 
 if __name__ == "__main__":
