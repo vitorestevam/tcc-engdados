@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from silver.sentiment import add_sentiment_to_comments
+from gold_sentiment import add_sentiment_to_comments
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 SILVER_DIR = PROJECT_ROOT / "data" / "silver"
