@@ -50,19 +50,20 @@ def write_parquet(records: list[dict], path: Path) -> None:
     pd.DataFrame(records).to_parquet(path, index=False)
 
 
-def select_relevant_videos(
-    relevance_file: Path | str = RELEVANCE_FILE,
-    output_dir: Path | str = SILVER_DIR,
-    videos_dir: Path | str = BRONZE_VIDEOS_DIR,
-    videos_file: Path | str | None = None,
-) -> None:
-    relevance_file = Path(relevance_file)
-    output_dir = Path(output_dir)
-    terms = parse_relevance_terms(relevance_file)
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Filtra videos relevantes ao tema da eleicao.")
+    input_group = parser.add_mutually_exclusive_group()
+    input_group.add_argument("--videos-dir", type=Path, default=BRONZE_VIDEOS_DIR)
+    input_group.add_argument("--videos-file", type=Path, help="JSON Bronze de uma execucao especifica")
+    parser.add_argument("--relevance-file", type=Path, default=RELEVANCE_FILE)
+    parser.add_argument("--output-dir", type=Path, default=SILVER_DIR)
+    args = parser.parse_args()
+
+    terms = parse_relevance_terms(args.relevance_file)
     source_videos = (
-        load_bronze_video_file(Path(videos_file))
-        if videos_file is not None
-        else load_bronze_videos(Path(videos_dir))
+        load_bronze_video_file(args.videos_file)
+        if args.videos_file
+        else load_bronze_videos(args.videos_dir)
     )
     videos = deduplicate_latest(source_videos)
 
@@ -73,30 +74,13 @@ def select_relevant_videos(
         record = {**video, "matched_terms": matched_terms}
         (relevantes if relevant else descartados).append(record)
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-    write_parquet(relevantes, output_dir / "videos_relevantes.parquet")
-    write_parquet(descartados, output_dir / "videos_descartados.parquet")
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    write_parquet(relevantes, args.output_dir / "videos_relevantes.parquet")
+    write_parquet(descartados, args.output_dir / "videos_descartados.parquet")
 
     print(
         f"{len(videos)} videos unicos avaliados | "
         f"{len(relevantes)} relevantes | {len(descartados)} descartados"
-    )
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Filtra videos relevantes ao tema da eleicao.")
-    input_group = parser.add_mutually_exclusive_group()
-    input_group.add_argument("--videos-dir", type=Path, default=BRONZE_VIDEOS_DIR)
-    input_group.add_argument("--videos-file", type=Path, help="JSON Bronze de uma execucao especifica")
-    parser.add_argument("--relevance-file", type=Path, default=RELEVANCE_FILE)
-    parser.add_argument("--output-dir", type=Path, default=SILVER_DIR)
-    args = parser.parse_args()
-
-    select_relevant_videos(
-        relevance_file=args.relevance_file,
-        output_dir=args.output_dir,
-        videos_dir=args.videos_dir,
-        videos_file=args.videos_file,
     )
 
 

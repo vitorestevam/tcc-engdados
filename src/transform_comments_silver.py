@@ -64,22 +64,24 @@ def deduplicate_latest(comments: list[dict]) -> list[dict]:
     return list(latest_by_id.values())
 
 
-def transform_comments_silver(
-    videos_silver_file: Path | str = VIDEOS_SILVER_FILE,
-    output_file: Path | str = OUTPUT_FILE,
-    comments_dir: Path | str = BRONZE_COMMENTS_DIR,
-    comments_file: Path | str | None = None,
-) -> None:
-    videos_silver_file = Path(videos_silver_file)
-    output_file = Path(output_file)
-    relevant_video_ids = set(pd.read_parquet(videos_silver_file)["video_id"])
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Filtra e padroniza os comentarios dos videos relevantes.")
+    input_group = parser.add_mutually_exclusive_group()
+    input_group.add_argument("--comments-dir", type=Path, default=BRONZE_COMMENTS_DIR)
+    input_group.add_argument("--comments-file", type=Path, help="JSON Bronze de uma execucao especifica")
+    parser.add_argument("--videos-silver-file", type=Path, default=VIDEOS_SILVER_FILE)
+    parser.add_argument("--output-file", type=Path, default=OUTPUT_FILE)
+    args = parser.parse_args()
+
+    relevant_video_ids = set(pd.read_parquet(args.videos_silver_file)["video_id"])
 
     source_comments = (
-        load_bronze_comments_file(Path(comments_file))
-        if comments_file is not None
-        else load_bronze_comments(Path(comments_dir))
+        load_bronze_comments_file(args.comments_file)
+        if args.comments_file
+        else load_bronze_comments(args.comments_dir)
     )
-    comments = [comment for comment in source_comments if comment["video_id"] in relevant_video_ids]
+    comments = source_comments
+    comments = [comment for comment in comments if comment["video_id"] in relevant_video_ids]
     comments = deduplicate_latest(comments)
 
     df = pd.DataFrame(comments)
@@ -91,26 +93,9 @@ def transform_comments_silver(
 
     silver_df = df[OUTPUT_COLUMNS].drop_duplicates(subset="comment_id", keep="last")
 
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    silver_df.to_parquet(output_file, index=False)
-    print(f"{len(silver_df)} comentarios gravados em {output_file}")
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Filtra e padroniza os comentarios dos videos relevantes.")
-    input_group = parser.add_mutually_exclusive_group()
-    input_group.add_argument("--comments-dir", type=Path, default=BRONZE_COMMENTS_DIR)
-    input_group.add_argument("--comments-file", type=Path, help="JSON Bronze de uma execucao especifica")
-    parser.add_argument("--videos-silver-file", type=Path, default=VIDEOS_SILVER_FILE)
-    parser.add_argument("--output-file", type=Path, default=OUTPUT_FILE)
-    args = parser.parse_args()
-
-    transform_comments_silver(
-        videos_silver_file=args.videos_silver_file,
-        output_file=args.output_file,
-        comments_dir=args.comments_dir,
-        comments_file=args.comments_file,
-    )
+    args.output_file.parent.mkdir(parents=True, exist_ok=True)
+    silver_df.to_parquet(args.output_file, index=False)
+    print(f"{len(silver_df)} comentarios gravados em {args.output_file}")
 
 
 if __name__ == "__main__":
