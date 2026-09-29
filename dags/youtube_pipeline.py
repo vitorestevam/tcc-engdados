@@ -14,6 +14,7 @@ DATA_DIR = "/opt/airflow/data"
 RUN_ID = "{{ logical_date.in_timezone('UTC').strftime('%Y%m%dT%H%M%SZ') }}"
 BRONZE_RUN_DIR = f"{DATA_DIR}/bronze/{RUN_ID}"
 SILVER_RUN_DIR = f"{DATA_DIR}/silver/{RUN_ID}"
+GOLD_RUN_DIR = f"{DATA_DIR}/gold/{RUN_ID}"
 CONFIG_RUN_DIR = f"{DATA_DIR}/config/{RUN_ID}"
 COLLECTION_START = "{{ dag_run.conf.get('start_date', params.start_date) }}T00:00:00+00:00"
 COLLECTION_END = "{{ dag_run.conf.get('end_date', params.end_date) }}T23:59:59.999999+00:00"
@@ -22,6 +23,9 @@ sys.path.insert(0, f"{PROJECT_DIR}/src")
 
 from bronze_collect_comments import collect_comments
 from bronze_collect_videos import collect_videos
+from gold_add_sentiment import add_sentiment
+from gold_create_aggregations import create_gold_aggregations
+from gold_create_temporal_series import create_temporal_series
 from prepare_run_settings import prepare_run_settings
 from silver_select_relevant_videos import select_relevant_videos
 from silver_transform_comments import transform_comments_silver
@@ -37,7 +41,7 @@ DEFAULT_RELEVANCE_TERMS = json.loads(
 
 with DAG(
     dag_id="youtube_pipeline",
-    description="Coleta dados do YouTube na Bronze e produz a camada Silver.",
+    description="Coleta dados do YouTube e produz as camadas Bronze, Silver e Gold.",
     start_date=datetime(2026, 9, 12),
     schedule=None,
     catchup=False,
@@ -73,7 +77,7 @@ with DAG(
             description="Lista de objetos com type, label e term.",
         ),
     },
-    tags=["youtube", "bronze", "silver"],
+    tags=["youtube", "bronze", "silver", "gold"],
 ) as dag:
     prepare_run_settings_task = PythonOperator(
         task_id="config_prepare_run_settings",
@@ -131,6 +135,36 @@ with DAG(
         },
     )
 
+    add_sentiment_task = PythonOperator(
+        task_id="gold_add_sentiment",
+        python_callable=add_sentiment,
+        op_kwargs={
+            "input_file": f"{SILVER_RUN_DIR}/comments_silver.parquet",
+            "output_file": f"{GOLD_RUN_DIR}/comments_with_sentiment.parquet",
+        },
+    )
+
+    create_temporal_series_task = PythonOperator(
+        task_id="gold_create_temporal_series",
+        python_callable=create_temporal_series,
+        op_kwargs={
+            "videos_file": f"{SILVER_RUN_DIR}/videos_silver.parquet",
+            "comments_file": f"{GOLD_RUN_DIR}/comments_with_sentiment.parquet",
+            "output_file": f"{GOLD_RUN_DIR}/serie_temporal_volume.parquet",
+        },
+    )
+
+    create_aggregations_task = PythonOperator(
+        task_id="gold_create_aggregations",
+        python_callable=create_gold_aggregations,
+        op_kwargs={
+            "videos_file": f"{SILVER_RUN_DIR}/videos_silver.parquet",
+            "comments_file": f"{GOLD_RUN_DIR}/comments_with_sentiment.parquet",
+            "candidates_output_file": f"{GOLD_RUN_DIR}/candidatos_manifestacoes.parquet",
+            "themes_output_file": f"{GOLD_RUN_DIR}/temas_engajamento.parquet",
+        },
+    )
+
     (
         prepare_run_settings_task
         >> collect_videos_task
@@ -138,4 +172,7 @@ with DAG(
         >> select_relevant_videos_task
         >> transform_videos_silver_task
         >> transform_comments_silver_task
+        >> add_sentiment_task
+        >> create_temporal_series_task
+        >> create_aggregations_task
     )

@@ -16,7 +16,6 @@ CHANNELS_FILE = PROJECT_ROOT / "settings" / "channels.json"
 OUTPUT_DIR = PROJECT_ROOT / "data" / "videos"
 LOGGER = logging.getLogger(__name__)
 
-
 def parse_collection_date(value: str, is_end: bool = False) -> datetime:
     try:
         parsed_date = datetime.strptime(value, "%Y-%m-%d").date()
@@ -143,7 +142,6 @@ def collect_videos(
     if collection_start > collection_end:
         raise ValueError("A data inicial deve ser anterior ou igual a data final.")
     collected_at = datetime.now(UTC)
-
     LOGGER.info("Iniciando coleta de videos: canais=%s saida=%s", channels_file, output_file)
     load_dotenv(PROJECT_ROOT / ".env")
     api_key = os.getenv("YOUTUBE_API_KEY")
