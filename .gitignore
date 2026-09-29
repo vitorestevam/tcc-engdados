@@ -6,3 +6,5 @@ __pycache__/
 .ipynb_checkpoints/
 .venv/
 .vscode/
+docs/relatorio_gold.md
+reports/validacao/
