@@ -8,3 +8,4 @@ __pycache__/
 .vscode/
 docs/relatorio_gold.md
 reports/validacao/
+*.ipynb
