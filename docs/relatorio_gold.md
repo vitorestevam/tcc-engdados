@@ -336,13 +336,12 @@ tcc-engdados/
 │       ├── videos_silver.parquet
 │       └── comments_silver.parquet
 ├── src/
-│   ├── gold/
-│   │   ├── temporal.py
-│   │   └── queries.py
+│   ├── gold_create_temporal_series.py
+│   ├── gold_create_aggregations.py
 │   ├── silver/
 │   │   ├── sentiment.py                       (atual)
 │   │   └── sentiment_bert.py                  (futuro)
-│   └── add_sentiment.py
+│   └── gold_add_sentiment.py
 └── docs/
     ├── relatorio_gold_completo.md             (NOVO)
     ├── entrega_1.md
