@@ -7,7 +7,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from config import PAGE_CONFIG, PROJECT_INFO
-from utils.data_loader import load_candidatos, load_comentarios_enriched, get_sentimentos_summary
+from utils.data_loader import (
+    get_sentimentos_summary,
+    load_candidatos,
+    load_comentarios_enriched,
+    render_run_selector,
+)
 
 # Configurar página
 st.set_page_config(**PAGE_CONFIG)
@@ -34,12 +39,15 @@ st.markdown("---")
 
 # Carregar dados
 try:
-    candidatos = load_candidatos()
-    comentarios = load_comentarios_enriched()
+    run_id = render_run_selector()
+    candidatos = load_candidatos(run_id)
+    comentarios = load_comentarios_enriched(run_id)
 except FileNotFoundError as e:
     st.error(f"Erro ao carregar dados: {e}")
     st.info("Verifique se os arquivos Gold foram gerados corretamente.")
     st.stop()
+
+st.caption(f"Execução selecionada: {run_id}")
 
 # Filtrar apenas dados de mídia para canais
 comentarios_midia = comentarios[comentarios["category"] == "imprensa"].copy()

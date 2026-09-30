@@ -2,9 +2,16 @@
 
 ## Acesso Rápido
 
-### 1. Iniciar o Dashboard
+### 1. Iniciar com Docker Compose
 ```bash
-.venv\Scripts\python -m streamlit run dashboard/streamlit_app.py
+docker compose up --build
+```
+
+O dashboard estará disponível em: **http://localhost:8501**.
+
+### 2. Iniciar localmente
+```bash
+.venv/bin/python -m streamlit run dashboard/streamlit_app.py --server.port 8506
 ```
 
 O dashboard abrirá automaticamente em: **http://localhost:8506**
@@ -189,10 +196,10 @@ O dashboard possui **4 páginas principais**, acessíveis pelo menu lateral esqu
    - Campo 'candidato' para relacionar comentários de mídia aos candidatos mencionados
 
 ### Arquivos de Dados Utilizados
-- `data/gold/comentarios_gold_enriched.parquet` - 42.334 comentários com sentimento e emoções
-- `data/gold/candidatos_timeline.parquet` - Série temporal de 60 registros (2 candidatos)
-- `data/gold/canais_timeline.parquet` - Série temporal de 37 registros (2 canais)
-- `data/silver/videos_silver.parquet` - 1.391 vídeos com metadados
+- `data/gold/<run_id>/comentarios_gold_enriched.parquet` - comentários com sentimento, emoções, canal e candidato
+- `data/gold/<run_id>/candidatos_timeline.parquet` - série temporal de comentários dos canais de candidatos
+- `data/gold/<run_id>/canais_timeline.parquet` - série temporal de comentários dos canais de imprensa
+- `data/silver/<run_id>/videos_silver.parquet` - vídeos relevantes com metadados
 - `settings/channels.json` - Configuração dos 4 canais (categoria, identificador)
 - `settings/relevance_terms.json` - 45+ termos de filtro por relevância
 

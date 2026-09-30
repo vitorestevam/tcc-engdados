@@ -1,17 +1,11 @@
 """Configurações globais do dashboard Streamlit."""
 
-import os
 from pathlib import Path
 
-# Diretórios
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
-GOLD_DIR = DATA_DIR / "gold"
-
-# Caminhos dos arquivos Parquet
-CANDIDATOS_FILE = GOLD_DIR / "candidatos_manifestacoes.parquet"
-TEMAS_FILE = GOLD_DIR / "temas_engajamento.parquet"
-COMENTARIOS_FILE = GOLD_DIR / "comments_with_sentiment.parquet"
+GOLD_ROOT = DATA_DIR / "gold"
+SILVER_ROOT = DATA_DIR / "silver"
 
 # Configuração Streamlit
 PAGE_CONFIG = {

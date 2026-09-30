@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from utils.data_loader import load_comentarios_enriched, load_canais_timeline
+from utils.data_loader import load_canais_timeline, load_comentarios_enriched, render_run_selector
 from config import SENTIMENT_COLORS
 
 st.set_page_config(page_title="Canais - Dashboard", layout="wide")
@@ -17,11 +17,14 @@ st.title("Análise por Canal de Mídia")
 
 # Carregar dados
 try:
-    comentarios = load_comentarios_enriched()
-    canais_timeline = load_canais_timeline()
+    run_id = render_run_selector()
+    comentarios = load_comentarios_enriched(run_id)
+    canais_timeline = load_canais_timeline(run_id)
 except FileNotFoundError as e:
     st.error(f"Erro ao carregar dados: {e}")
     st.stop()
+
+st.caption(f"Execução selecionada: {run_id}")
 
 # Filtrar apenas comentários de mídia (imprensa)
 comentarios_midia = comentarios[comentarios["category"] == "imprensa"].copy()

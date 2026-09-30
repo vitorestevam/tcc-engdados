@@ -1,104 +1,139 @@
-"""Funções para carregar e processar dados dos arquivos Parquet."""
+"""Carregamento dos artefatos Gold e Silver de uma execução da DAG."""
+
+from functools import lru_cache
+from pathlib import Path
 
 import pandas as pd
-from pathlib import Path
-from functools import lru_cache
-import sys
+import streamlit as st
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from config import CANDIDATOS_FILE, TEMAS_FILE, COMENTARIOS_FILE
+from config import GOLD_ROOT, SILVER_ROOT
 
-# Caminhos das novas tabelas enriquecidas
-COMENTARIOS_ENRICHED_FILE = CANDIDATOS_FILE.parent / "comentarios_gold_enriched.parquet"
-CANDIDATOS_TIMELINE_FILE = CANDIDATOS_FILE.parent / "candidatos_timeline.parquet"
-CANAIS_TIMELINE_FILE = CANDIDATOS_FILE.parent / "canais_timeline.parquet"
-
-
-@lru_cache(maxsize=3)
-def load_candidatos() -> pd.DataFrame:
-    """Carrega dados de candidatos manifestações."""
-    try:
-        df = pd.read_parquet(CANDIDATOS_FILE)
-        return df.sort_values("comentarios_total", ascending=False)
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Arquivo não encontrado: {CANDIDATOS_FILE}")
+REQUIRED_GOLD_FILES = (
+    "comments_with_sentiment.parquet",
+    "candidatos_manifestacoes.parquet",
+    "temas_engajamento.parquet",
+    "comentarios_gold_enriched.parquet",
+    "candidatos_timeline.parquet",
+    "canais_timeline.parquet",
+)
 
 
-@lru_cache(maxsize=3)
-def load_temas() -> pd.DataFrame:
-    """Carrega dados de engajamento por tema."""
-    try:
-        df = pd.read_parquet(TEMAS_FILE)
-        return df.sort_values("comentarios_total", ascending=False)
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Arquivo não encontrado: {TEMAS_FILE}")
+def get_available_run_ids() -> list[str]:
+    if not GOLD_ROOT.is_dir() or not SILVER_ROOT.is_dir():
+        return []
+    return sorted(
+        path.name
+        for path in GOLD_ROOT.iterdir()
+        if path.is_dir()
+        and (SILVER_ROOT / path.name).is_dir()
+        and all((path / filename).is_file() for filename in REQUIRED_GOLD_FILES)
+    )
 
 
-@lru_cache(maxsize=3)
-def load_comentarios() -> pd.DataFrame:
-    """Carrega dados de comentários com sentimento."""
-    try:
-        df = pd.read_parquet(COMENTARIOS_FILE)
-        # Converter coluna de data se existir
-        for date_col in ["date", "published_at", "created_at", "comment_date"]:
-            if date_col in df.columns:
-                df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
-        return df
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Arquivo não encontrado: {COMENTARIOS_FILE}")
+def render_run_selector() -> str:
+    run_ids = get_available_run_ids()
+    if not run_ids:
+        raise FileNotFoundError(
+            "Nenhuma execução completa foi encontrada. Execute a DAG com a etapa gold_enrich_datasets."
+        )
+
+    default_run_id = run_ids[-1]
+    if st.session_state.get("dashboard_run_id") not in run_ids:
+        st.session_state["dashboard_run_id"] = default_run_id
+    return st.sidebar.selectbox(
+        "Execução da DAG",
+        options=list(reversed(run_ids)),
+        key="dashboard_run_id",
+        help="Cada execução usa os próprios artefatos Bronze, Silver e Gold.",
+    )
 
 
-def get_sentimentos_summary(df: pd.DataFrame) -> dict:
-    """Retorna resumo de sentimentos."""
+def get_selected_run_id() -> str:
+    run_ids = get_available_run_ids()
+    if not run_ids:
+        raise FileNotFoundError(
+            "Nenhuma execução completa foi encontrada. Execute a DAG com a etapa gold_enrich_datasets."
+        )
+    return st.session_state.get("dashboard_run_id", run_ids[-1])
+
+
+def _run_file(run_id: str, filename: str, layer: str = "gold") -> Path:
+    root = GOLD_ROOT if layer == "gold" else SILVER_ROOT
+    path = root / run_id / filename
+    if not path.is_file():
+        raise FileNotFoundError(f"Arquivo não encontrado para a execução {run_id}: {path}")
+    return path
+
+
+def _read_comments(path: Path) -> pd.DataFrame:
+    frame = pd.read_parquet(path)
+    for date_column in ("published_at", "updated_at"):
+        if date_column in frame.columns:
+            frame[date_column] = pd.to_datetime(frame[date_column], errors="coerce", utc=True)
+    return frame
+
+
+@lru_cache(maxsize=8)
+def load_candidatos(run_id: str | None = None) -> pd.DataFrame:
+    selected_run_id = run_id or get_selected_run_id()
+    return pd.read_parquet(_run_file(selected_run_id, "candidatos_manifestacoes.parquet")).sort_values(
+        "comentarios_total", ascending=False
+    )
+
+
+@lru_cache(maxsize=8)
+def load_temas(run_id: str | None = None) -> pd.DataFrame:
+    selected_run_id = run_id or get_selected_run_id()
+    return pd.read_parquet(_run_file(selected_run_id, "temas_engajamento.parquet")).sort_values(
+        "comentarios_total", ascending=False
+    )
+
+
+@lru_cache(maxsize=8)
+def load_comentarios(run_id: str | None = None) -> pd.DataFrame:
+    selected_run_id = run_id or get_selected_run_id()
+    return _read_comments(_run_file(selected_run_id, "comments_with_sentiment.parquet"))
+
+
+@lru_cache(maxsize=8)
+def load_comentarios_enriched(run_id: str | None = None) -> pd.DataFrame:
+    selected_run_id = run_id or get_selected_run_id()
+    return _read_comments(_run_file(selected_run_id, "comentarios_gold_enriched.parquet"))
+
+
+@lru_cache(maxsize=8)
+def load_candidatos_timeline(run_id: str | None = None) -> pd.DataFrame:
+    selected_run_id = run_id or get_selected_run_id()
+    frame = pd.read_parquet(_run_file(selected_run_id, "candidatos_timeline.parquet"))
+    frame["data"] = pd.to_datetime(frame["data"])
+    return frame.sort_values("data")
+
+
+@lru_cache(maxsize=8)
+def load_canais_timeline(run_id: str | None = None) -> pd.DataFrame:
+    selected_run_id = run_id or get_selected_run_id()
+    frame = pd.read_parquet(_run_file(selected_run_id, "canais_timeline.parquet"))
+    frame["data"] = pd.to_datetime(frame["data"])
+    return frame.sort_values("data")
+
+
+@lru_cache(maxsize=8)
+def load_videos(run_id: str | None = None) -> pd.DataFrame:
+    selected_run_id = run_id or get_selected_run_id()
+    return pd.read_parquet(_run_file(selected_run_id, "videos_silver.parquet", layer="silver"))
+
+
+def get_sentimentos_summary(frame: pd.DataFrame) -> dict[str, int]:
     return {
-        "positivo": (df.get("sentimento") == "POSITIVO").sum() if "sentimento" in df.columns else 0,
-        "negativo": (df.get("sentimento") == "NEGATIVO").sum() if "sentimento" in df.columns else 0,
-        "neutro": (df.get("sentimento") == "NEUTRO").sum() if "sentimento" in df.columns else 0,
+        "positivo": int((frame.get("sentimento") == "POSITIVO").sum()),
+        "negativo": int((frame.get("sentimento") == "NEGATIVO").sum()),
+        "neutro": int((frame.get("sentimento") == "NEUTRO").sum()),
     }
 
 
-def format_number(num: float | int) -> str:
-    """Formata número para exibição (ex: 1000 -> 1K)."""
-    if num >= 1_000_000:
-        return f"{num / 1_000_000:.1f}M"
-    elif num >= 1_000:
-        return f"{num / 1_000:.1f}K"
-    else:
-        return str(int(num))
-
-
-@lru_cache(maxsize=3)
-def load_candidatos_timeline() -> pd.DataFrame:
-    """Carrega timeline de candidatos com série temporal."""
-    try:
-        df = pd.read_parquet(CANDIDATOS_TIMELINE_FILE)
-        df["data"] = pd.to_datetime(df["data"])
-        return df.sort_values("data", ascending=False)
-    except FileNotFoundError:
-        return pd.DataFrame()  # Retornar vazio se não existir
-
-
-@lru_cache(maxsize=3)
-def load_canais_timeline() -> pd.DataFrame:
-    """Carrega timeline de canais com série temporal."""
-    try:
-        df = pd.read_parquet(CANAIS_TIMELINE_FILE)
-        df["data"] = pd.to_datetime(df["data"])
-        return df.sort_values("data", ascending=False)
-    except FileNotFoundError:
-        return pd.DataFrame()  # Retornar vazio se não existir
-
-
-@lru_cache(maxsize=3)
-def load_comentarios_enriched() -> pd.DataFrame:
-    """Carrega comentários enriquecidos com candidato/canal."""
-    try:
-        df = pd.read_parquet(COMENTARIOS_ENRICHED_FILE)
-        # Converter coluna de data se existir
-        for date_col in ["date", "published_at", "created_at", "comment_date"]:
-            if date_col in df.columns:
-                df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
-        return df
-    except FileNotFoundError:
-        # Fallback: retornar comentários normais se enriquecidos não existem
-        return load_comentarios()
+def format_number(number: float | int) -> str:
+    if number >= 1_000_000:
+        return f"{number / 1_000_000:.1f}M"
+    if number >= 1_000:
+        return f"{number / 1_000:.1f}K"
+    return str(int(number))

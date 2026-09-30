@@ -9,7 +9,12 @@ import re
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from utils.data_loader import load_comentarios, get_sentimentos_summary
+from utils.data_loader import (
+    get_sentimentos_summary,
+    load_comentarios,
+    load_videos,
+    render_run_selector,
+)
 from config import SENTIMENT_COLORS
 
 # Função para anonimizar comentários
@@ -42,10 +47,13 @@ st.title("Análise Detalhada de Sentimentos")
 
 # Carregar dados
 try:
-    comentarios = load_comentarios()
+    run_id = render_run_selector()
+    comentarios = load_comentarios(run_id)
 except FileNotFoundError as e:
     st.error(f"Erro ao carregar dados: {e}")
     st.stop()
+
+st.caption(f"Execução selecionada: {run_id}")
 
 # Carregar dados resumo
 sentimentos = get_sentimentos_summary(comentarios)
@@ -185,7 +193,7 @@ st.subheader("🎥 Vídeos com Maior Repercussão na Semana")
 
 # Carregar dados de vídeos para obter títulos
 try:
-    videos_df = pd.read_parquet("data/silver/videos_silver.parquet")
+    videos_df = load_videos(run_id)
     
     # Merge comentários com vídeos para obter título
     df_videos = comentarios[["video_id", "published_at"]].copy()

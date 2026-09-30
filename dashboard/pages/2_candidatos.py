@@ -9,7 +9,12 @@ import re
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from utils.data_loader import load_candidatos, load_candidatos_timeline, load_comentarios_enriched
+from utils.data_loader import (
+    load_candidatos,
+    load_candidatos_timeline,
+    load_comentarios_enriched,
+    render_run_selector,
+)
 from config import SENTIMENT_COLORS, CANDIDATE_COLORS
 
 # Função para anonimizar comentários
@@ -38,11 +43,14 @@ st.title("Análise por Candidato")
 
 # Carregar dados
 try:
-    candidatos = load_candidatos()
-    comentarios = load_comentarios_enriched()
+    run_id = render_run_selector()
+    candidatos = load_candidatos(run_id)
+    comentarios = load_comentarios_enriched(run_id)
 except FileNotFoundError as e:
     st.error(f"Erro ao carregar dados: {e}")
     st.stop()
+
+st.caption(f"Execução selecionada: {run_id}")
 
 # Resumo geral
 st.subheader(f"Total de Candidatos Analisados: {len(candidatos)}")
@@ -81,7 +89,7 @@ st.markdown("---")
 # Timeline de Sentimentos dos Candidatos
 st.subheader("Evolução Temporal de Sentimentos - Candidatos")
 
-candidatos_timeline = load_candidatos_timeline()
+candidatos_timeline = load_candidatos_timeline(run_id)
 
 if not candidatos_timeline.empty:
     # Dropdown para selecionar candidato

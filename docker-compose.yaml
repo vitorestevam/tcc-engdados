@@ -60,5 +60,25 @@ services:
       airflow-init:
         condition: service_completed_successfully
 
+  dashboard:
+    build: .
+    user: "${AIRFLOW_UID:-50000}:0"
+    entrypoint: []
+    command:
+      - streamlit
+      - run
+      - /opt/airflow/project/dashboard/streamlit_app.py
+      - --server.address
+      - 0.0.0.0
+      - --server.port
+      - "8501"
+      - --server.headless
+      - "true"
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./dashboard:/opt/airflow/project/dashboard:ro
+      - ./data:/opt/airflow/project/data:ro
+
 volumes:
   postgres-data:

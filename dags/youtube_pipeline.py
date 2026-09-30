@@ -25,6 +25,7 @@ from bronze_collect_comments import collect_comments
 from bronze_collect_videos import collect_videos
 from gold_add_sentiment import add_sentiment
 from gold_create_aggregations import create_gold_aggregations
+from gold_enrich_datasets import enrich_gold_datasets
 from gold_create_temporal_series import create_temporal_series
 from prepare_run_settings import prepare_run_settings
 from silver_select_relevant_videos import select_relevant_videos
@@ -165,6 +166,18 @@ with DAG(
         },
     )
 
+    enrich_datasets_task = PythonOperator(
+        task_id="gold_enrich_datasets",
+        python_callable=enrich_gold_datasets,
+        op_kwargs={
+            "videos_file": f"{SILVER_RUN_DIR}/videos_silver.parquet",
+            "comments_file": f"{GOLD_RUN_DIR}/comments_with_sentiment.parquet",
+            "enriched_comments_output_file": f"{GOLD_RUN_DIR}/comentarios_gold_enriched.parquet",
+            "candidates_timeline_output_file": f"{GOLD_RUN_DIR}/candidatos_timeline.parquet",
+            "channels_timeline_output_file": f"{GOLD_RUN_DIR}/canais_timeline.parquet",
+        },
+    )
+
     (
         prepare_run_settings_task
         >> collect_videos_task
@@ -175,4 +188,5 @@ with DAG(
         >> add_sentiment_task
         >> create_temporal_series_task
         >> create_aggregations_task
+        >> enrich_datasets_task
     )
