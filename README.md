@@ -27,3 +27,24 @@ O servico `airflow-init` cria `data/` e ajusta automaticamente sua permissao par
 Cada execucao escreve artefatos separados em `data/bronze/<YYYY-MM-DDThh:mmTZD>/videos.json` e `comments.json`, por exemplo `data/bronze/2026-09-12T12:56Z/`. O timestamp e UTC e permite multiplas execucoes no mesmo dia.
 
 O fluxo termina na Bronze por enquanto. Silver, Gold, PostgreSQL analitico, MinIO e Superset continuam planejados e nao fazem parte desta composicao.
+
+## Dashboard
+
+Dashboard Streamlit para análise de sentimentos e engajamento em comentários do YouTube. Visualiza dados das camadas Silver e Gold após processamento completo do pipeline.
+
+Para iniciar:
+
+```bash
+.venv\Scripts\python -m streamlit run dashboard/streamlit_app.py
+```
+
+Acessa `http://localhost:8506`. Exibe:
+
+- **Home**: KPIs gerais (2 candidatos, 42.334 comentários, 1.391 vídeos, 2 canais de mídia)
+- **Sentimentos**: Distribuição, timeline e análise de 6 emoções (BERT multilíngue)
+- **Candidatos**: Comparação entre Ciro Gomes e Elmano de Freitas com score de sentimento
+- **Canais**: Cobertura de Diário do Nordeste e O POVO com engajamento
+
+Todos os comentários exibidos são anonimizados automaticamente (remove URLs, emails, @menções, telefones, CPFs).
+
+Detalhes completos em [docs/guia_dashboard.md](docs/guia_dashboard.md).

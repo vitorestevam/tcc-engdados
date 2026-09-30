@@ -9,6 +9,16 @@
       "source": "Diário do Nordeste",
       "category": "imprensa",
       "identifier": "@diariodonordeste"
+    },
+    {
+      "source": "Elmano de Freitas",
+      "category": "candidato",
+      "identifier": "@elmanodefreitas"
+    },
+    {
+      "source": "O POVO",
+      "category": "imprensa",
+      "identifier": "@opovo"
     }
   ]
 }

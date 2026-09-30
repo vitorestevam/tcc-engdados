@@ -12,6 +12,7 @@ from silver.relevance import RELEVANCE_FILE, is_relevant, parse_relevance_terms
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 BRONZE_VIDEOS_DIR = PROJECT_ROOT / "data" / "videos"
 SILVER_DIR = PROJECT_ROOT / "data" / "silver"
+CHANNELS_FILE = PROJECT_ROOT / "settings" / "channels.json"
 
 
 def load_bronze_videos(bronze_dir: Path) -> list[dict]:
@@ -31,6 +32,15 @@ def load_bronze_video_file(path: Path) -> list[dict]:
         video["collected_at"] = collected_at
         videos.append(video)
     return videos
+
+
+def load_channels_config(channels_file: Path | str = CHANNELS_FILE) -> dict[str, str]:
+    """Carrega configuração de canais e retorna mapa de source -> categoria."""
+    try:
+        config = json.loads(Path(channels_file).read_text(encoding="utf-8"))
+        return {ch["source"]: ch["category"] for ch in config.get("channels", [])}
+    except (OSError, json.JSONDecodeError, KeyError):
+        return {}
 
 
 def deduplicate_latest(videos: list[dict]) -> list[dict]:
@@ -55,10 +65,13 @@ def select_relevant_videos(
     output_dir: Path | str = SILVER_DIR,
     videos_dir: Path | str = BRONZE_VIDEOS_DIR,
     videos_file: Path | str | None = None,
+    channels_file: Path | str = CHANNELS_FILE,
 ) -> None:
     relevance_file = Path(relevance_file)
     output_dir = Path(output_dir)
     terms = parse_relevance_terms(relevance_file)
+    source_categories = load_channels_config(channels_file)
+    
     source_videos = (
         load_bronze_video_file(Path(videos_file))
         if videos_file is not None
@@ -69,7 +82,17 @@ def select_relevant_videos(
     relevantes = []
     descartados = []
     for video in videos:
-        relevant, matched_terms = is_relevant(video["title"], video.get("description", ""), terms)
+        source = video.get("source", "")
+        category = source_categories.get(source, "desconhecido")
+        
+        # Para CANDIDATOS: aceita TODOS os vídeos sem filtro de relevância
+        if category == "candidato":
+            relevant = True
+            matched_terms = ["[todos_vídeos_candidato]"]
+        else:
+            # Para MÍDIA e outros: aplica filtro de relevância
+            relevant, matched_terms = is_relevant(video["title"], video.get("description", ""), terms)
+        
         record = {**video, "matched_terms": matched_terms}
         (relevantes if relevant else descartados).append(record)
 
@@ -89,6 +112,7 @@ def main() -> None:
     input_group.add_argument("--videos-dir", type=Path, default=BRONZE_VIDEOS_DIR)
     input_group.add_argument("--videos-file", type=Path, help="JSON Bronze de uma execucao especifica")
     parser.add_argument("--relevance-file", type=Path, default=RELEVANCE_FILE)
+    parser.add_argument("--channels-file", type=Path, default=CHANNELS_FILE)
     parser.add_argument("--output-dir", type=Path, default=SILVER_DIR)
     args = parser.parse_args()
 
@@ -97,6 +121,7 @@ def main() -> None:
         output_dir=args.output_dir,
         videos_dir=args.videos_dir,
         videos_file=args.videos_file,
+        channels_file=args.channels_file,
     )
 
 
