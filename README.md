@@ -2,16 +2,7 @@
 
 Pipeline para coletar vídeos e comentários do YouTube, selecionar conteúdo eleitoral e gerar análises de sentimento e emoção. A execução é orquestrada pelo Airflow e o resultado pode ser explorado no dashboard Streamlit.
 
-```mermaid
-flowchart LR
-    A[Configuração] --> B[Bronze]
-    B --> C[Silver]
-    C --> D[Gold]
-    D --> E[Dashboard]
-    B --> B1[videos.json e comments.json]
-    C --> C1[Parquets limpos e relevantes]
-    D --> D1[Sentimento BERT, agregações e timelines]
-```
+<img width="1952" height="806" alt="Data Lakehouse Pipeline Architecture" src="https://github.com/user-attachments/assets/06be164a-07d0-4a40-89d1-c04c1742da3c" />
 
 ## Pré-requisitos
 
